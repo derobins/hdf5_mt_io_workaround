@@ -43,11 +43,6 @@ main(int argc, char *argv[])
     if (H5I_INVALID_HID == (msid = H5Screate_simple(NDIMS, chunk_dims, chunk_dims)))
         goto error;
 
-    if (H5I_INVALID_HID == (dcpl_id = H5Pcreate(H5P_DATASET_CREATE)))
-        goto error;
-    if (H5Pset_chunk(dcpl_id, 1, chunk_dims) < 0)
-        goto error;
-
     if (H5I_INVALID_HID == (did = H5Dcreate2(fid, DATASET_NAME, tid, fsid, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)))
         goto error;
 

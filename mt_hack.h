@@ -6,5 +6,5 @@
 /* 1D dataset: default 4G elements, 1K element chunks */
 #define NDIMS       1
 //#define DSET_SIZE        4294967296
-#define DSET_SIZE   4096
-#define CHUNK_SIZE  1024
+#define DSET_SIZE   1073741824
+#define CHUNK_SIZE  1048576
