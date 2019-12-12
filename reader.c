@@ -1,9 +1,11 @@
 /* Reader program for HDF5 multithreaded dataset I/O hack example */
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <pthread.h>
 
@@ -65,7 +67,7 @@ error:
 } /* normal */
 
 int
-direct_chunk(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
+direct_chunk(hid_t did)
 {
     hsize_t offset = 0;
     uint32_t mask = 0;
@@ -99,9 +101,125 @@ error:
 } /* direct chunk */
 
 int
-multithreaded(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
+posix_io(hid_t did, hid_t fsid)
 {
+    hsize_t offset = 0;
+    hsize_t nchunks = 0;
+    uint32_t mask = 0;
+    haddr_t addr = HADDR_UNDEF;
+    hsize_t size = 0;
+
+    int fd = -1;
+
+    int *buf = NULL;
+
+    /* Open the HDF5 file for POSIX I/O */
+    if ((fd = open(FILENAME, O_RDONLY)) < 0)
+        goto error;
+
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+        goto error;
+
+    /* Get the number of chunks */
+    if (H5Dget_num_chunks(did, fsid, &nchunks) < 0)
+        goto error;
+
+    /* Loop over all chunks */
+    for (hsize_t u = 0; u < nchunks; u++) {
+
+        offset = u;
+
+        memset(buf, 0, CHUNK_SIZE * sizeof(int));
+
+        /* Get the chunk size */
+        addr = HADDR_UNDEF;
+        size = 0;
+        if (H5Dget_chunk_info_by_coord(did, &offset, &mask, &addr, &size) < 0)
+            goto error;
+
+        /* Read the data */
+        if (pread(fd, buf, size, (off_t)addr) < 0)
+            goto error;
+
+        if (verify(buf, CHUNK_SIZE) < 0)
+            goto error;
+    }
+
+    free(buf);
+
+    if (close(fd) < 0)
+        goto error;
+
     return 0;
+
+error:
+    free(buf);
+
+    if (fd > -1)
+        close(fd);
+
+    return -1;
+} /* posix_io */
+
+int
+multithreaded(hid_t did, hid_t fsid)
+{
+    hsize_t offset = 0;
+    hsize_t nchunks = 0;
+    uint32_t mask = 0;
+    haddr_t addr = HADDR_UNDEF;
+    hsize_t size = 0;
+
+    int fd = -1;
+
+    int *buf = NULL;
+
+    /* Open the HDF5 file for POSIX I/O */
+    if ((fd = open(FILENAME, O_RDONLY)) < 0)
+        goto error;
+
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+        goto error;
+
+    /* Get the number of chunks */
+    if (H5Dget_num_chunks(did, fsid, &nchunks) < 0)
+        goto error;
+
+    /* Loop over all chunks */
+    for (hsize_t u = 0; u < nchunks; u++) {
+
+        offset = u;
+
+        memset(buf, 0, CHUNK_SIZE * sizeof(int));
+
+        /* Get the chunk size */
+        addr = HADDR_UNDEF;
+        size = 0;
+        if (H5Dget_chunk_info_by_coord(did, &offset, &mask, &addr, &size) < 0)
+            goto error;
+
+        /* Read the data */
+        if (pread(fd, buf, size, (off_t)addr) < 0)
+            goto error;
+
+        if (verify(buf, CHUNK_SIZE) < 0)
+            goto error;
+    }
+
+    free(buf);
+
+    if (close(fd) < 0)
+        goto error;
+
+    return 0;
+
+error:
+    free(buf);
+
+    if (fd > -1)
+        close(fd);
+
+    return -1;
 } /* multithreaded */
 
 
@@ -148,11 +266,15 @@ main(int argc, char *argv[])
         goto error;
 
     /* H5Ddirect_chunk */
-    if (direct_chunk(did, tid, msid, fsid) < 0)
+    if (direct_chunk(did) < 0)
+        goto error;
+
+    /* Single-threaded version of multithreading hack */
+    if (posix_io(did, fsid) < 0)
         goto error;
 
     /* Multithreading hack */
-    if (multithreaded(did, tid, msid, fsid) < 0)
+    if (multithreaded(did, fsid) < 0)
         goto error;
 
     /*********/
