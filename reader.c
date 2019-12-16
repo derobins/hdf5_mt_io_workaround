@@ -7,13 +7,12 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <pthread.h>
-
 #include <hdf5.h>
+
+#include "thpool.h"
 
 #include "mt_hack.h"
 
-#include "thpool.h"
 
 int fd_g = -1;
 
