@@ -283,8 +283,8 @@ main(int argc, char *argv[])
     hid_t msid = H5I_INVALID_HID;
     hid_t fsid = H5I_INVALID_HID;
 
-    hsize_t dims[NDIMS] = {DSET_SIZE};
-    hsize_t chunk_dims[NDIMS] = {CHUNK_SIZE};
+    hsize_t dims = DSET_SIZE;
+    hsize_t chunk_dims = CHUNK_SIZE;
 
     printf("HDF5 multithreaded I/O hack - reader\n");
 
@@ -298,10 +298,10 @@ main(int argc, char *argv[])
     if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))
         goto error;
 
-    if (H5I_INVALID_HID == (fsid = H5Screate_simple(NDIMS, dims, dims)))
+    if (H5I_INVALID_HID == (fsid = H5Screate_simple(1, &dims, &dims)))
         goto error;
 
-    if (H5I_INVALID_HID == (msid = H5Screate_simple(NDIMS, chunk_dims, chunk_dims)))
+    if (H5I_INVALID_HID == (msid = H5Screate_simple(1, &chunk_dims, &chunk_dims)))
         goto error;
 
     if (H5I_INVALID_HID == (did = H5Dopen2(fid, DATASET_NAME, H5P_DEFAULT)))

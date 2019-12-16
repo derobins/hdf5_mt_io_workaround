@@ -17,8 +17,8 @@ main(int argc, char *argv[])
     hid_t msid = H5I_INVALID_HID;
     hid_t fsid = H5I_INVALID_HID;
 
-    hsize_t dims[NDIMS] = {DSET_SIZE};
-    hsize_t chunk_dims[NDIMS] = {CHUNK_SIZE};
+    hsize_t dims = DSET_SIZE;
+    hsize_t chunk_dims = CHUNK_SIZE;
 
     hsize_t offset = 0;
     hsize_t count = 0;
@@ -37,15 +37,15 @@ main(int argc, char *argv[])
     if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))
         goto error;
 
-    if (H5I_INVALID_HID == (fsid = H5Screate_simple(NDIMS, dims, dims)))
+    if (H5I_INVALID_HID == (fsid = H5Screate_simple(1, &dims, &dims)))
         goto error;
 
-    if (H5I_INVALID_HID == (msid = H5Screate_simple(NDIMS, chunk_dims, chunk_dims)))
+    if (H5I_INVALID_HID == (msid = H5Screate_simple(1, &chunk_dims, &chunk_dims)))
         goto error;
 
     if (H5I_INVALID_HID == (dcpl_id = H5Pcreate(H5P_DATASET_CREATE)))
         goto error;
-    if (H5Pset_chunk(dcpl_id, NDIMS, chunk_dims) < 0)
+    if (H5Pset_chunk(dcpl_id, 1, &chunk_dims) < 0)
         goto error;
 
     if (H5I_INVALID_HID == (did = H5Dcreate2(fid, DATASET_NAME, tid, fsid, H5P_DEFAULT, dcpl_id, H5P_DEFAULT)))
