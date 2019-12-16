@@ -1,4 +1,4 @@
-/* Reader program for HDF5 multithreaded dataset I/O hack example */
+/* Reader program for HDF5 multithreaded dataset I/O work-around example */
 
 #include <assert.h>
 #include <fcntl.h>
@@ -11,7 +11,7 @@
 
 #include "thpool.h"
 
-#include "mt_hack.h"
+#include "mt_work_around.h"
 
 
 int fd_g = -1;
@@ -285,7 +285,7 @@ main(int argc, char *argv[])
     hsize_t dims = DSET_SIZE;
     hsize_t chunk_dims = CHUNK_SIZE;
 
-    printf("HDF5 multithreaded I/O hack - reader\n");
+    printf("HDF5 multithreaded I/O work-around - reader\n");
 
     /***************************/
     /* Create/open HDF5 things */

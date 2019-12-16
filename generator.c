@@ -1,11 +1,11 @@
-/* Generator program for HDF5 multithreaded dataset I/O hack example */
+/* Generator program for HDF5 multithreaded dataset I/O work-around example */
 
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <hdf5.h>
 
-#include "mt_hack.h"
+#include "mt_work_around.h"
 
 int
 main(int argc, char *argv[])
@@ -25,7 +25,7 @@ main(int argc, char *argv[])
 
     int *buf = NULL;
 
-    printf("HDF5 multithreaded I/O hack - generator\n");
+    printf("HDF5 multithreaded I/O work-around - generator\n");
 
     /**********************/
     /* Create HDF5 things */
