@@ -1,5 +1,7 @@
 # hdf5_mt_io_workaround
 An experimental program to perform multi-threaded I/O using the HDF5 library
+and POSIX pread(2) calls to get around the global thread lock used to
+protect the HDF5 library.
 
 # Building
 
