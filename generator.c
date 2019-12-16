@@ -1,11 +1,27 @@
 /* Generator program for HDF5 multithreaded dataset I/O work-around example */
 
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <hdf5.h>
 
 #include "mt_work_around.h"
+
+void
+usage(void)
+{
+    printf("\n");
+    printf("HDF5 multi-threaded I/O work-around\n");
+    printf("Generates an HDF5 file containing a single, chunked, 1D dataset\n");
+    printf("for use with the reader program.\n");
+    printf("\n");
+    printf("Usage: generator <filename>\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("\t?\tPrint this help information\n");
+    printf("\n");
+} /* usage */
 
 int
 main(int argc, char *argv[])
@@ -25,13 +41,37 @@ main(int argc, char *argv[])
 
     int *buf = NULL;
 
+    int c;
+
+    char *filename = NULL;
+
+
+    while ((c = getopt(argc, argv, ":")) != -1) {
+        switch (c) {
+            case '?':
+                usage();
+                exit(EXIT_SUCCESS);
+        }
+    }
+
+    /* File name is the last argument */
+    if (optind != argc - 1) {
+        printf("\n");
+        printf("BADNESS: Data file name must be last parameter\n");
+        printf("\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
+    else
+        filename = argv[optind];
+
     printf("HDF5 multithreaded I/O work-around - generator\n");
 
     /**********************/
     /* Create HDF5 things */
     /**********************/
 
-    if (H5I_INVALID_HID == (fid = H5Fcreate(FILENAME, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT)))
+    if (H5I_INVALID_HID == (fid = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT)))
         goto error;
 
     if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))

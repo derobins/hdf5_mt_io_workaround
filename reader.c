@@ -14,7 +14,19 @@
 #include "mt_work_around.h"
 
 
+typedef enum algorithm_e {
+    HDF5_DEFAULT = 0,
+    DIRECT_CHUNK,
+    POSIX_ST,
+    POSIX_MT
+} algorithm_e;
+
+
+/* Globals */
+
+/* File descriptor for the POSIX access */
 int fd_g = -1;
+
 
 int
 verify(int *buf, int count)
@@ -31,7 +43,7 @@ verify(int *buf, int count)
 } /* verify */
 
 int
-normal(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
+hdf5_default(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
 {
     hsize_t offset = 0;
     hsize_t count = 0;
@@ -69,7 +81,7 @@ error:
     free(buf);
 
     return -1;
-} /* normal */
+} /* hdf5_default */
 
 int
 direct_chunk(hid_t did)
@@ -108,7 +120,7 @@ error:
 } /* direct chunk */
 
 int
-posix_io(hid_t did, hid_t fsid)
+posix_single_thread(hid_t did, hid_t fsid, const char *filename)
 {
     hsize_t offset = 0;
     hsize_t nchunks = 0;
@@ -123,7 +135,7 @@ posix_io(hid_t did, hid_t fsid)
     printf("Single-threaded POSIX I/O calls\n");
 
     /* Open the HDF5 file for POSIX I/O */
-    if ((fd = open(FILENAME, O_RDONLY)) < 0)
+    if ((fd = open(filename, O_RDONLY)) < 0)
         goto error;
 
     if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
@@ -168,7 +180,7 @@ error:
         close(fd);
 
     return -1;
-} /* posix_io */
+} /* posix_single_thread */
 
 
 typedef struct work_params_t {
@@ -205,7 +217,7 @@ error:
 
 
 int
-multithreaded(hid_t did, hid_t fsid)
+posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
 {
     hsize_t offset = 0;
     hsize_t nchunks = 0;
@@ -218,11 +230,12 @@ multithreaded(hid_t did, hid_t fsid)
     printf("Multithreaded POSIX I/O calls\n");
 
     /* Create the thread pool */
-    if (NULL == (pool = thpool_init(4)))
+    if (NULL == (pool = thpool_init(n_threads)))
         goto error;
+    printf("Number of threads: %d\n", n_threads);
 
     /* Open the HDF5 file for POSIX I/O */
-    if ((fd_g = open(FILENAME, O_RDONLY)) < 0)
+    if ((fd_g = open(filename, O_RDONLY)) < 0)
         goto error;
 
     /* Get the number of chunks */
@@ -269,9 +282,41 @@ error:
     free(params);
 
     return -1;
-} /* multithreaded */
+} /* posix_multithreaded */
 
 
+void
+usage(void)
+{
+    printf("\n");
+    printf("HDF5 multi-threaded I/O work-around - reader\n");
+    printf("Reads and verifies the data in the generated file.\n");
+    printf("(Run after running the generator program)\n");
+    printf("\n");
+    printf("The four algorithms are:\n");
+    printf("\n");
+    printf("default - Uses H5Dread to read the data.\n");
+    printf("          This is the default so you don't need to specify this explicitly.\n");
+    printf("\n");
+    printf("directchunk - Uses H5Dread_chunk to read the data.\n");
+    printf("              This bypasses the filter pipeline and can be\n");
+    printf("              slightly more efficient (albeit dangerous).\n");
+    printf("\n");
+    printf("posixst - Uses pread(2) to read the data outside of the HDF5 library.\n");
+    printf("          This is mainly a sanity check on the multithreaded algorithm.\n");
+    printf("\n");
+    printf("posixmt - Uses pread(2) to read the data outside of the HDF5 library\n");
+    printf("          using multiple threads, the number of which can be set using\n");
+    printf("          the -t parameter.\n");
+    printf("\n");
+    printf("Usage: reader [options] <filename> \n");
+    printf("\n");
+    printf("Options:\n");
+    printf("\ta\tI/O algorithm (default|directchunk|posixst|posixmt)\n");
+    printf("\tt\tNumber of threads in thread pool (posixmt only, default is 4)\n");
+    printf("\t?\tPrint this help information\n");
+    printf("\n");
+} /* usage */
 
 int
 main(int argc, char *argv[])
@@ -285,13 +330,51 @@ main(int argc, char *argv[])
     hsize_t dims = DSET_SIZE;
     hsize_t chunk_dims = CHUNK_SIZE;
 
+    int c;
+
+    algorithm_e algorithm = HDF5_DEFAULT;
+
+    int n_threads = 4;
+
+    char *filename = NULL;
+
+    while ((c = getopt(argc, argv, ":a:t:")) != -1) {
+        switch (c) {
+            case 'a':
+                if (!strcmp(optarg, "directchunk"))
+                    algorithm = DIRECT_CHUNK;
+                else if (!strcmp(optarg, "posixst"))
+                    algorithm = POSIX_ST;
+                else if (!strcmp(optarg, "posixmt"))
+                    algorithm = POSIX_MT;
+                break;
+            case 't':
+                n_threads = atoi(optarg);
+                break;
+            case '?':
+                usage();
+                exit(EXIT_SUCCESS);
+        }
+    }
+
+    /* File name is the last argument */
+    if (optind != argc - 1) {
+        printf("\n");
+        printf("BADNESS: Data file name must be last parameter\n");
+        printf("\n");
+        usage();
+        exit(EXIT_FAILURE);
+    }
+    else
+        filename = argv[optind];
+
     printf("HDF5 multithreaded I/O work-around - reader\n");
 
     /***************************/
     /* Create/open HDF5 things */
     /***************************/
 
-    if (H5I_INVALID_HID == (fid = H5Fopen(FILENAME, H5F_ACC_RDONLY, H5P_DEFAULT)))
+    if (H5I_INVALID_HID == (fid = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT)))
         goto error;
 
     if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))
@@ -311,20 +394,28 @@ main(int argc, char *argv[])
     /************************/
 
     /* H5Dread */
-//    if (normal(did, tid, msid, fsid) < 0)
-//        goto error;
+    if (HDF5_DEFAULT == algorithm)
+        if (hdf5_default(did, tid, msid, fsid) < 0)
+            goto error;
 
-    /* H5Ddirect_chunk */
-//    if (direct_chunk(did) < 0)
-//        goto error;
+    /* H5Dread_chunk */
+    if (DIRECT_CHUNK == algorithm)
+        if (direct_chunk(did) < 0)
+            goto error;
 
-    /* Single-threaded version of multithreading hack */
-//    if (posix_io(did, fsid) < 0)
-//        goto error;
+    /* Single-threaded version of multithreading work-around
+     *
+     * Mainly a sanity check on the algorithm if something goes wrong
+     * with the multithreaded version.
+     */
+    if (POSIX_ST == algorithm)
+        if (posix_single_thread(did, fsid, filename) < 0)
+            goto error;
 
-    /* Multithreading hack */
-    if (multithreaded(did, fsid) < 0)
-        goto error;
+    /* Multithreading work-around */
+    if (POSIX_MT == algorithm)
+        if (posix_multithreaded(did, fsid, filename, n_threads) < 0)
+            goto error;
 
     /*********/
     /* Close */

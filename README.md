@@ -27,13 +27,15 @@ and the reader opens it and reads it using three different forms of I/O:
 
 * H5Dread calls
 * H5Dread_chunk calls
-* A single-threaded version of the multithreaded hack
-* The multithreaded hack
+* A single-threaded version of the multithreaded work-around
+* The multithreaded work-around
 
-```
-./generator
-./reader
-```
+The generator currently takes no command-line options. If you want to adjust
+the size of the generated file or the dataset chunk size, you'll have to
+modify the mt_work_around.h file.
+
+The reader has options for the algorithm and number of threads (when using the
+multithreaded work-around). Run reader -? to get an updated list of the options.
 
 The multithreaded hack gets the address and size of the dataset's chunks from
 the HDF5 library on the main thread and then fires off POSIX I/O read and

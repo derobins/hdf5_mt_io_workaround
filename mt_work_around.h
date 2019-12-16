@@ -3,7 +3,6 @@
 #ifndef _mt_work_around_H
 #define _mt_work_around_H
 
-#define FILENAME "data.h5"
 #define DATASET_NAME "data"
 
 /* 1D dataset: default 4G elements, 1K element chunks */
