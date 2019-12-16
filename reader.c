@@ -29,13 +29,13 @@ int fd_g = -1;
 
 
 int
-verify(int *buf, int count)
+verify(uint32_t *buf, uint32_t val, int count)
 {
     assert(buf);
 
     for (int i = 0; i < count; i++)
-        if (buf[i] != i) {
-            printf("BAD VERIFICATION! %d should be %d at index %d\n", buf[i], i, i);
+        if (buf[i] != val) {
+            printf("BAD VERIFICATION! %ul should be %ul at index %d\n", buf[i], val, i);
             return -1;
         }
 
@@ -47,21 +47,22 @@ hdf5_default(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
 {
     hsize_t offset = 0;
     hsize_t count = 0;
-
-    int *buf = NULL;
+    uint32_t chunk_n = 0;
+    uint32_t *buf = NULL;
 
     printf("H5Dread I/O calls\n");
 
-    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(uint32_t))))
         goto error;
 
     count = CHUNK_SIZE;
+    chunk_n = 0;
 
     for (hsize_t u = 0; u < DSET_SIZE; u += CHUNK_SIZE) {
 
         offset = u;
 
-        memset(buf, 0, CHUNK_SIZE * sizeof(int));
+        memset(buf, 0, CHUNK_SIZE * sizeof(uint32_t));
 
         if (H5Sselect_hyperslab(fsid, H5S_SELECT_SET, &offset, NULL, &count, NULL) < 0)
             goto error;
@@ -69,8 +70,10 @@ hdf5_default(hid_t did, hid_t tid, hid_t msid, hid_t fsid)
         if (H5Dread(did, tid, msid, fsid, H5P_DEFAULT, buf) < 0)
             goto error;
 
-        if (verify(buf, CHUNK_SIZE) < 0)
+        if (verify(buf, chunk_n, CHUNK_SIZE) < 0)
             goto error;
+
+        chunk_n++;
     }
 
     free(buf);
@@ -88,25 +91,29 @@ direct_chunk(hid_t did)
 {
     hsize_t offset = 0;
     uint32_t mask = 0;
-
-    int *buf = NULL;
+    uint32_t chunk_n = 0;
+    uint32_t *buf = NULL;
 
     printf("H5Dread_chunk I/O calls\n");
 
-    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(uint32_t))))
         goto error;
+
+    chunk_n = 0;
 
     for (hsize_t u = 0; u < DSET_SIZE; u += CHUNK_SIZE) {
 
         offset = u;
 
-        memset(buf, 0, CHUNK_SIZE * sizeof(int));
+        memset(buf, 0, CHUNK_SIZE * sizeof(uint32_t));
 
         if (H5Dread_chunk(did, H5P_DEFAULT, &offset, &mask, buf) < 0)
             goto error;
 
-        if (verify(buf, CHUNK_SIZE) < 0)
+        if (verify(buf, chunk_n, CHUNK_SIZE) < 0)
             goto error;
+
+        chunk_n++;
     }
 
     free(buf);
@@ -130,7 +137,8 @@ posix_single_thread(hid_t did, hid_t fsid, const char *filename)
 
     int fd = -1;
 
-    int *buf = NULL;
+    uint32_t chunk_n = 0;
+    uint32_t *buf = NULL;
 
     printf("Single-threaded POSIX I/O calls\n");
 
@@ -146,11 +154,14 @@ posix_single_thread(hid_t did, hid_t fsid, const char *filename)
         goto error;
 
     /* Loop over all chunks */
+
+    chunk_n = 0;
+
     for (hsize_t u = 0; u < nchunks; u++) {
 
-        offset = u;
+        offset = u * CHUNK_SIZE;
 
-        memset(buf, 0, CHUNK_SIZE * sizeof(int));
+        memset(buf, 0, CHUNK_SIZE * sizeof(uint32_t));
 
         /* Get the chunk size */
         addr = HADDR_UNDEF;
@@ -162,8 +173,10 @@ posix_single_thread(hid_t did, hid_t fsid, const char *filename)
         if (pread(fd, buf, size, (off_t)addr) < 0)
             goto error;
 
-        if (verify(buf, CHUNK_SIZE) < 0)
+        if (verify(buf, chunk_n, CHUNK_SIZE) < 0)
             goto error;
+
+        chunk_n++;
     }
 
     free(buf);
@@ -184,6 +197,7 @@ error:
 
 
 typedef struct work_params_t {
+    uint32_t chunk_n;
     haddr_t addr;
     hsize_t size;
 } work_params_t;
@@ -193,16 +207,16 @@ read_and_verify(void *arg)
 {
     work_params_t *params = (work_params_t *)arg;
 
-    int *buf = NULL;
+    uint32_t *buf = NULL;
 
-    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(uint32_t))))
         goto error;
 
     /* Read the data */
     if (pread(fd_g, buf, params->size, (off_t)(params->addr)) < 0)
         goto error;
 
-    if (verify(buf, CHUNK_SIZE) < 0)
+    if (verify(buf, params->chunk_n, CHUNK_SIZE) < 0)
         goto error;
 
     free(buf);
@@ -222,6 +236,7 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
     hsize_t offset = 0;
     hsize_t nchunks = 0;
     uint32_t mask = 0;
+    uint32_t chunk_n = 0;
 
     work_params_t *params = NULL;
 
@@ -247,6 +262,9 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
         goto error;
 
     /* Loop over all chunks */
+
+    chunk_n = 0;
+
     for (hsize_t u = 0; u < nchunks; u++) {
 
         offset = u * CHUNK_SIZE;
@@ -255,9 +273,13 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
         if (H5Dget_chunk_info_by_coord(did, &offset, &mask, &(params[u].addr), &(params[u].size)) < 0)
             goto error;
 
+        params[u].chunk_n = chunk_n;
+
         /* Add a unit of work to the thread pool */
         if (thpool_add_work(pool, read_and_verify, (void *)&params[u]) < 0)
             goto error;
+
+        chunk_n++;
     }
 
     thpool_wait(pool);
@@ -377,7 +399,7 @@ main(int argc, char *argv[])
     if (H5I_INVALID_HID == (fid = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT)))
         goto error;
 
-    if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))
+    if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_UINT32)))
         goto error;
 
     if (H5I_INVALID_HID == (fsid = H5Screate_simple(1, &dims, &dims)))

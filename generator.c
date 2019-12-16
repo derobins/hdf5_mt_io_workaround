@@ -39,7 +39,8 @@ main(int argc, char *argv[])
     hsize_t offset = 0;
     hsize_t count = 0;
 
-    int *buf = NULL;
+    uint32_t chunk_n = 0;
+    uint32_t *buf = NULL;
 
     int c;
 
@@ -74,7 +75,7 @@ main(int argc, char *argv[])
     if (H5I_INVALID_HID == (fid = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT)))
         goto error;
 
-    if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_INT)))
+    if (H5I_INVALID_HID == (tid = H5Tcopy(H5T_NATIVE_UINT32)))
         goto error;
 
     if (H5I_INVALID_HID == (fsid = H5Screate_simple(1, &dims, &dims)))
@@ -95,12 +96,11 @@ main(int argc, char *argv[])
     /* Write data */
     /**************/
 
-    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(int))))
+    if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(uint32_t))))
         goto error;
-    for (int i = 0; i < CHUNK_SIZE; i++)
-        buf[i] = i;
 
     count = CHUNK_SIZE;
+    chunk_n = 0;
 
     for (hsize_t u = 0; u < DSET_SIZE; u += CHUNK_SIZE) {
 
@@ -109,8 +109,13 @@ main(int argc, char *argv[])
         if (H5Sselect_hyperslab(fsid, H5S_SELECT_SET, &offset, NULL, &count, NULL) < 0)
             goto error;
 
+        for (uint32_t v = 0; v < CHUNK_SIZE; v++)
+            buf[v] = chunk_n;
+
         if (H5Dwrite(did, tid, msid, fsid, H5P_DEFAULT, buf) < 0)
             goto error;
+
+        chunk_n++;
     }
 
     /*********/
