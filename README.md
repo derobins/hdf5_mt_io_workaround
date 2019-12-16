@@ -6,11 +6,17 @@ protect the HDF5 library.
 # Building
 
 Use h5cc to build each test program. Note that the reader needs to link to
-a third-party threadpool library I've included as a git submodule.
+a third-party threadpool library I've included as a git submodule. You'll need
+to initialize the submodule after cloning with:
+
+```
+git submodule init
+git submodule update
+```
 
 To build the submodule (in subdirectory):
 ```
-gcc -c thpool.c -o thpool.c
+gcc -c thpool.c -o thpool.o
 ar rcs libthpool.a thpool.o
 ```
 
@@ -19,7 +25,7 @@ Then copy the header and static library to the main program directory.
 To build the programs:
 ```
 path/to/h5cc -o generator generator.c
-path/to/h5cc -L. -lthpool -o reader reader.c
+path/to/h5cc -L. -lthpool -pthread -o reader reader.c
 ```
 
 # Run
