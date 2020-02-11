@@ -30,6 +30,9 @@ int fd_g = -1;
 /* Whether or not to show thread execution times */
 bool show_thread_times_g = false;
 
+/* Whether or not to show thread bandwidths */
+bool show_thread_bandwidths_g = false;
+
 /* Function to convert timespec struct to nanoseconds */
 uint64_t
 ns_from_timespec(struct timespec ts)
@@ -61,6 +64,71 @@ print_elapsed_sec_thread(struct timespec start_ts, struct timespec end_ts)
      */
     printf("%f s\tThread execution time (via CLOCK_THREAD_CPUTIME_ID)\n", sec);
 }
+
+/* KiB, MiB, GiB, TiB, PiB, EiB - Used in profiling and timing code */
+#define H5_KB (1024.0)
+#define H5_MB (1024.0 * 1024.0)
+#define H5_GB (1024.0 * 1024.0 * 1024.0)
+#define H5_TB (1024.0 * 1024.0 * 1024.0 * 1024.0)
+#define H5_PB (1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0)
+#define H5_EB (1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0 * 1024.0)
+
+void
+print_bandwidth(uint64_t n_bytes, struct timespec start_ts, struct timespec end_ts)
+{
+    uint64_t start_ns = ns_from_timespec(start_ts);
+    uint64_t end_ns = ns_from_timespec(end_ts);
+    double n_seconds = (end_ns - start_ns) / (double)(1000 * 1000 * 1000);
+
+    char    buf[32];
+    double	bw;
+
+    bw = n_bytes / n_seconds;
+
+    if(0 == n_bytes)
+        strcpy(buf, "0.000  B/s");
+
+    else if(bw < 1.0)
+        sprintf(buf, "%10.4e", bw);
+
+    else if(bw < H5_KB) {
+        sprintf(buf, "%05.4f", bw);
+        strcpy(buf + 5, "  B/s");
+    }
+
+    else if(bw < H5_MB) {
+        sprintf(buf, "%05.4f", bw / H5_KB);
+        strcpy(buf + 5, " kB/s");
+    }
+
+    else if(bw < H5_GB) {
+        sprintf(buf, "%05.4f", bw / H5_MB);
+        strcpy(buf + 5, " MB/s");
+    }
+
+    else if(bw < H5_TB) {
+        sprintf(buf, "%05.4f", bw / H5_GB);
+        strcpy(buf + 5, " GB/s");
+    }
+
+    else if(bw < H5_PB) {
+        sprintf(buf, "%05.4f", bw / H5_TB);
+        strcpy(buf + 5, " TB/s");
+    }
+
+    else if(bw < H5_EB) {
+        sprintf(buf, "%05.4f", bw / H5_PB);
+        strcpy(buf + 5, " PB/s");
+    }
+
+    else {
+        sprintf(buf, "%10.4e", bw);
+        sprintf(buf, "%10.3e", bw);
+    }
+
+    printf("%s\n", buf);
+
+} /* print_bandwidth() */
 
 int
 verify(uint32_t *buf, uint32_t val, int count)
@@ -247,7 +315,7 @@ read_and_verify(void *arg)
     uint32_t *buf = NULL;
 
     /* START THREAD TIMER */
-    if (show_thread_times_g)
+    if (show_thread_times_g || show_thread_bandwidths_g)
         if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_start_ts) < 0)
             goto error;
 
@@ -264,11 +332,15 @@ read_and_verify(void *arg)
     free(buf);
 
     /* STOP THREAD TIMER */
-    if (show_thread_times_g) {
+    if (show_thread_times_g || show_thread_bandwidths_g)
         if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_end_ts) < 0)
             goto error;
+
+    /* Print timing and/or bandwidth */
+    if (show_thread_times_g)
         print_elapsed_sec_thread(thread_start_ts, thread_end_ts);
-    }
+    if (show_thread_bandwidths_g)
+        print_bandwidth(params->size, thread_start_ts, thread_end_ts);
 
     return;
 
@@ -411,6 +483,7 @@ usage(void)
     printf("\n");
     printf("Options:\n");
     printf("\ta\tI/O algorithm (default|directchunk|posixst|posixmt)\n");
+    printf("\nb\tShow thread bandwidth (default: no)\n");
     printf("\tn\tNumber of threads in thread pool (posixmt only, default is 4)\n");
     printf("\nt\tShow thread execution times (default: no)\n");
     printf("\t?\tPrint this help information\n");
@@ -441,7 +514,7 @@ main(int argc, char *argv[])
 
     char *filename = NULL;
 
-    while ((c = getopt(argc, argv, ":a:n:t")) != -1) {
+    while ((c = getopt(argc, argv, ":a:bn:t")) != -1) {
         switch (c) {
             case 'a':
                 if (!strcmp(optarg, "directchunk"))
@@ -450,6 +523,9 @@ main(int argc, char *argv[])
                     algorithm = POSIX_ST;
                 else if (!strcmp(optarg, "posixmt"))
                     algorithm = POSIX_MT;
+                break;
+            case 'b':
+                show_thread_bandwidths_g = true;
                 break;
             case 'n':
                 n_threads = atoi(optarg);
