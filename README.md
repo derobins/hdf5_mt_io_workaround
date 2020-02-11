@@ -1,10 +1,18 @@
-# hdf5_mt_io_hack
+# hdf5_mt_io_workaround
 An experimental program to perform multi-threaded I/O using the HDF5 library
+and POSIX pread(2) calls to get around the global thread lock used to
+protect the HDF5 library.
 
 # Building
 
 Use h5cc to build each test program. Note that the reader needs to link to
-a third-party threadpool library I've included as a git submodule.
+a third-party threadpool library I've included as a git submodule. You'll need
+to initialize the submodule after cloning with:
+
+```
+git submodule init
+git submodule update
+```
 
 To build the submodule (in subdirectory):
 ```
