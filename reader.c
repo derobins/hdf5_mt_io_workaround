@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <hdf5.h>
@@ -12,7 +13,6 @@
 #include "thpool.h"
 
 #include "mt_work_around.h"
-
 
 typedef enum algorithm_e {
     HDF5_DEFAULT = 0,
@@ -27,6 +27,40 @@ typedef enum algorithm_e {
 /* File descriptor for the POSIX access */
 int fd_g = -1;
 
+/* Whether or not to show thread execution times */
+bool show_thread_times_g = false;
+
+/* Function to convert timespec struct to nanoseconds */
+uint64_t
+ns_from_timespec(struct timespec ts)
+{
+    return (ts.tv_sec * 1000 * 1000 * 1000) + ts.tv_nsec;
+}
+
+void
+print_elapsed_sec(struct timespec start_ts, struct timespec end_ts)
+{
+    uint64_t start_ns = ns_from_timespec(start_ts);
+    uint64_t end_ns = ns_from_timespec(end_ts);
+
+    double sec = (end_ns - start_ns) / 1E9;
+
+    printf("%f s", sec);
+}
+
+void
+print_elapsed_sec_thread(struct timespec start_ts, struct timespec end_ts)
+{
+    uint64_t start_ns = ns_from_timespec(start_ts);
+    uint64_t end_ns = ns_from_timespec(end_ts);
+
+    double sec = (end_ns - start_ns) / 1E9;
+
+    /* In lieu of a real producer-consumer log, put all the printf I/O into 
+     * a single statement to minimize interleave.
+     */
+    printf("%f s\tThread execution time (via CLOCK_THREAD_CPUTIME_ID)\n", sec);
+}
 
 int
 verify(uint32_t *buf, uint32_t val, int count)
@@ -207,7 +241,15 @@ read_and_verify(void *arg)
 {
     work_params_t *params = (work_params_t *)arg;
 
+    struct timespec thread_start_ts;
+    struct timespec thread_end_ts;
+
     uint32_t *buf = NULL;
+
+    /* START THREAD TIMER */
+    if (show_thread_times_g)
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_start_ts) < 0)
+            goto error;
 
     if (NULL == (buf = malloc(CHUNK_SIZE * sizeof(uint32_t))))
         goto error;
@@ -220,6 +262,13 @@ read_and_verify(void *arg)
         goto error;
 
     free(buf);
+
+    /* STOP THREAD TIMER */
+    if (show_thread_times_g) {
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &thread_end_ts) < 0)
+            goto error;
+        print_elapsed_sec_thread(thread_start_ts, thread_end_ts);
+    }
 
     return;
 
@@ -238,6 +287,9 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
     uint32_t mask = 0;
     uint32_t chunk_n = 0;
 
+    struct timespec start_ts;
+    struct timespec end_ts;
+
     work_params_t *params = NULL;
 
     threadpool pool = NULL;
@@ -245,9 +297,15 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
     printf("Multithreaded POSIX I/O calls\n");
 
     /* Create the thread pool */
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+        goto error;
     if (NULL == (pool = thpool_init(n_threads)))
         goto error;
     printf("Number of threads: %d\n", n_threads);
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+        goto error;
+    print_elapsed_sec(start_ts, end_ts);
+    printf("\tTime to start thread pool (via CLOCK_PROCESS_CPUTIME_ID)\n");
 
     /* Open the HDF5 file for POSIX I/O */
     if ((fd_g = open(filename, O_RDONLY)) < 0)
@@ -265,6 +323,8 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
 
     chunk_n = 0;
 
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+        goto error;
     for (hsize_t u = 0; u < nchunks; u++) {
 
         offset = u * CHUNK_SIZE;
@@ -281,13 +341,29 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
 
         chunk_n++;
     }
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+        goto error;
+    print_elapsed_sec(start_ts, end_ts);
+    printf("\tTime spent launching threads (via CLOCK_PROCESS_CPUTIME_ID)\n");
 
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+        goto error;
     thpool_wait(pool);
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+        goto error;
+    print_elapsed_sec(start_ts, end_ts);
+    printf("\tTime spent waiting for all threads to finish (via CLOCK_PROCESS_CPUTIME_ID)\n");
 
     if (close(fd_g) < 0)
         goto error;
 
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+        goto error;
     thpool_destroy(pool); 
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+        goto error;
+    print_elapsed_sec(start_ts, end_ts);
+    printf("\tTime to destroy thread pool (via CLOCK_PROCESS_CPUTIME_ID)\n");
 
     free(params);
 
@@ -335,7 +411,8 @@ usage(void)
     printf("\n");
     printf("Options:\n");
     printf("\ta\tI/O algorithm (default|directchunk|posixst|posixmt)\n");
-    printf("\tt\tNumber of threads in thread pool (posixmt only, default is 4)\n");
+    printf("\tn\tNumber of threads in thread pool (posixmt only, default is 4)\n");
+    printf("\nt\tShow thread execution times (default: no)\n");
     printf("\t?\tPrint this help information\n");
     printf("\n");
 } /* usage */
@@ -352,6 +429,10 @@ main(int argc, char *argv[])
     hsize_t dims = DSET_SIZE;
     hsize_t chunk_dims = CHUNK_SIZE;
 
+    struct timespec ts;
+    struct timespec process_start_ts;
+    struct timespec process_end_ts;
+
     int c;
 
     algorithm_e algorithm = HDF5_DEFAULT;
@@ -360,7 +441,7 @@ main(int argc, char *argv[])
 
     char *filename = NULL;
 
-    while ((c = getopt(argc, argv, ":a:t:")) != -1) {
+    while ((c = getopt(argc, argv, ":a:n:t")) != -1) {
         switch (c) {
             case 'a':
                 if (!strcmp(optarg, "directchunk"))
@@ -370,8 +451,11 @@ main(int argc, char *argv[])
                 else if (!strcmp(optarg, "posixmt"))
                     algorithm = POSIX_MT;
                 break;
-            case 't':
+            case 'n':
                 n_threads = atoi(optarg);
+                break;
+            case 't':
+                show_thread_times_g = true;
                 break;
             case '?':
                 usage();
@@ -392,9 +476,32 @@ main(int argc, char *argv[])
 
     printf("HDF5 multithreaded I/O work-around - reader\n");
 
+    /* Spit out the clock resolutions */
+    printf("\n");
+    printf("Resolution of clocks as reported by clock_getres(3)\n");
+    if (clock_getres(CLOCK_MONOTONIC, &ts) < 0)
+        goto error;
+    printf("%-32s", "CLOCK_MONOTONIC: ");
+    printf("%lld.%.9ld s\n", (long long)ts.tv_sec, ts.tv_nsec);
+
+    if (clock_getres(CLOCK_PROCESS_CPUTIME_ID, &ts) < 0)
+        goto error;
+    printf("%-32s", "CLOCK_PROCESS_CPUTIME_ID: ");
+    printf("%lld.%.9ld s\n", (long long)ts.tv_sec, ts.tv_nsec);
+
+    if (clock_getres(CLOCK_THREAD_CPUTIME_ID, &ts) < 0)
+        goto error;
+    printf("%-32s", "CLOCK_THREAD_CPUTIME_ID: ");
+    printf("%lld.%.9ld s\n", (long long)ts.tv_sec, ts.tv_nsec);
+    printf("\n");
+
     /***************************/
     /* Create/open HDF5 things */
     /***************************/
+
+    /* START PROCESS TIMER */
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_start_ts) < 0)
+        goto error;
 
     if (H5I_INVALID_HID == (fid = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT)))
         goto error;
@@ -454,7 +561,14 @@ main(int argc, char *argv[])
     if (H5Fclose(fid) < 0)
         goto error;
 
+    /* STOP PROCESS TIMER */
+    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_end_ts) < 0)
+        goto error;
+
     printf("DONE!\n");
+
+    print_elapsed_sec(process_start_ts, process_end_ts);
+    printf("\tProcess execution time (via CLOCK_PROCESS_CPUTIME_ID)\n");
 
     return EXIT_SUCCESS;
 
