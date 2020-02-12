@@ -369,15 +369,15 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
     printf("Multithreaded POSIX I/O calls\n");
 
     /* Create the thread pool */
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts) < 0)
         goto error;
     if (NULL == (pool = thpool_init(n_threads)))
         goto error;
     printf("Number of threads: %d\n", n_threads);
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts) < 0)
         goto error;
     print_elapsed_sec(start_ts, end_ts);
-    printf("\tTime to start thread pool (via CLOCK_PROCESS_CPUTIME_ID)\n");
+    printf("\tTime to start thread pool (via CLOCK_MONOTONIC)\n");
 
     /* Open the HDF5 file for POSIX I/O */
     if ((fd_g = open(filename, O_RDONLY)) < 0)
@@ -395,7 +395,7 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
 
     chunk_n = 0;
 
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts) < 0)
         goto error;
     for (hsize_t u = 0; u < nchunks; u++) {
 
@@ -413,29 +413,29 @@ posix_multithreaded(hid_t did, hid_t fsid, const char *filename, int n_threads)
 
         chunk_n++;
     }
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts) < 0)
         goto error;
     print_elapsed_sec(start_ts, end_ts);
-    printf("\tTime spent launching threads (via CLOCK_PROCESS_CPUTIME_ID)\n");
+    printf("\tTime spent launching threads (via CLOCK_MONOTONIC)\n");
 
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts) < 0)
         goto error;
     thpool_wait(pool);
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts) < 0)
         goto error;
     print_elapsed_sec(start_ts, end_ts);
-    printf("\tTime spent waiting for all threads to finish (via CLOCK_PROCESS_CPUTIME_ID)\n");
+    printf("\tTime spent waiting for all threads to finish (via CLOCK_MONOTONIC)\n");
 
     if (close(fd_g) < 0)
         goto error;
 
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &start_ts) < 0)
         goto error;
     thpool_destroy(pool); 
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &end_ts) < 0)
         goto error;
     print_elapsed_sec(start_ts, end_ts);
-    printf("\tTime to destroy thread pool (via CLOCK_PROCESS_CPUTIME_ID)\n");
+    printf("\tTime to destroy thread pool (via CLOCK_MONOTONIC)\n");
 
     free(params);
 
@@ -576,7 +576,7 @@ main(int argc, char *argv[])
     /***************************/
 
     /* START PROCESS TIMER */
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_start_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &process_start_ts) < 0)
         goto error;
 
     if (H5I_INVALID_HID == (fid = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT)))
@@ -638,11 +638,11 @@ main(int argc, char *argv[])
         goto error;
 
     /* STOP PROCESS TIMER */
-    if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_end_ts) < 0)
+    if (clock_gettime(CLOCK_MONOTONIC, &process_end_ts) < 0)
         goto error;
 
     print_elapsed_sec(process_start_ts, process_end_ts);
-    printf("\tProcess execution time (via CLOCK_PROCESS_CPUTIME_ID)\n");
+    printf("\tProcess execution time (via CLOCK_MONOTONIC)\n");
 
     printf("DONE!\n");
 
