@@ -641,10 +641,10 @@ main(int argc, char *argv[])
     if (clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &process_end_ts) < 0)
         goto error;
 
-    printf("DONE!\n");
-
     print_elapsed_sec(process_start_ts, process_end_ts);
     printf("\tProcess execution time (via CLOCK_PROCESS_CPUTIME_ID)\n");
+
+    printf("DONE!\n");
 
     return EXIT_SUCCESS;
 
