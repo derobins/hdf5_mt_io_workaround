@@ -1,25 +1,55 @@
 ; -- fio job file --
 
-; -- Simulates chunk I/O from MT workaround --
-[chunk-simulation]
-
+[global]
 ; -- Use pread --
 readwrite=read
 ioengine=psync
 
-; -- Set the number of threads --
-numjobs=4
+; -- use threads instead of processes --
 thread
 
 ; -- Use a single file and specify the total size --
-filename=chunk-simulation.dat
-filesize=1GiB
+filename=/p/lustre1/dana118r/fio/chunk-simulation.dat
+filesize=4GiB
 
-; -- Specify how much each thread reads, the block size, and the offset in % --
-size=256MiB
+; -- The block size for reads --
 bs=1MiB
-offset_increment=0.25
 
 ; -- Group all the threads together for more compact output --
 group_reporting
 
+
+; -- Simulations for various numbers of threads -- 
+[chunk-simulation-1]
+numjobs=1
+size=4GiB
+
+
+[chunk-simulation-2]
+numjobs=2
+size=2GiB
+offset_increment=2GiB
+
+
+[chunk-simulation-4]
+numjobs=4
+size=1GiB
+offset_increment=1GiB
+
+
+[chunk-simulation-8]
+numjobs=8
+size=512MiB
+offset_increment=512MiB
+
+
+[chunk-simulation-16]
+numjobs=16
+size=256MiB
+offset_increment=256MiB
+
+
+[chunk-simulation-32]
+numjobs=32
+size=128MiB
+offset_increment=128MiB
