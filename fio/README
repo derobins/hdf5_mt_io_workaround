@@ -1,0 +1,9 @@
+This directory includes job files for obtaining I/O performance stats
+using fio. To run, edit the appropriate .fio file as needed and run fio like so:
+
+    $ fio <name>.fio
+
+You can find the docs for fio here:
+
+https://fio.readthedocs.io/en/latest/fio_doc.html
+

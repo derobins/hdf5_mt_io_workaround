@@ -1,0 +1,25 @@
+; -- fio job file --
+
+; -- Simulates chunk I/O from MT workaround --
+[chunk-simulation]
+
+; -- Use pread --
+readwrite=read
+ioengine=psync
+
+; -- Set the number of threads --
+numjobs=4
+thread
+
+; -- Use a single file and specify the total size --
+filename=chunk-simulation.dat
+filesize=1GiB
+
+; -- Specify how much each thread reads, the block size, and the offset in % --
+size=256MiB
+bs=1MiB
+offset_increment=0.25
+
+; -- Group all the threads together for more compact output --
+group_reporting
+
